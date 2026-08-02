@@ -183,7 +183,10 @@
     watchlist: "anicult_watchlist",
     history: "anicult_history",
     progress: "anicult_progress",
-    dubCache: "anicult_dub_cache",
+    // v2: bumped to invalidate dub results cached by the old, broken probe
+    // (it never parsed the player's string payload, so every title was cached
+    // as sub-only and never re-checked).
+    dubCache: "anicult_dub_cache_v2",
   };
 
   function storageGet(key) {
@@ -254,14 +257,37 @@
   // the dub source; the embed notifies us via postMessage whether it can play.
   // Results are cached (see KEYS.dubCache) so each anime is only probed once.
   // ----------------------------------------------------------------------------
+  // Megavid/KissKH players post player events to the parent frame as JSON
+  // *strings* (e.g. '{"channel":"kisskh","event":"time",...}'). Normalize the
+  // payload so callers can read `channel` / `event` / `type` on the object.
+  function parseKisskhMessage(e) {
+    let d = e.data;
+    if (typeof d === "string") {
+      try {
+        d = JSON.parse(d);
+      } catch (err) {
+        return null;
+      }
+    }
+    if (!d || typeof d !== "object") return null;
+    return d;
+  }
+
   function probeDub(anime, episode = 1) {
     const cached = isDubCached(anime.id, episode);
     if (cached !== null) return Promise.resolve(cached);
 
     return new Promise((resolve) => {
+      // The megavid player only confirms a source by actually starting playback:
+      // it posts `time`, `complete` and `watching-log` events while playing, and
+      // `error` when a stream fails. A `display:none` iframe can't autoplay, so
+      // park the probe off-screen instead and grant it autoplay permission.
       const iframe = document.createElement("iframe");
-      iframe.style.display = "none";
       iframe.src = makeEmbedUrl(episode, anime.id, "dub", anime.idMal || null);
+      iframe.setAttribute("allow", "autoplay; fullscreen");
+      iframe.setAttribute("loading", "eager");
+      iframe.style.cssText =
+        "position:fixed;left:-10000px;top:0;width:320px;height:180px;border:0;opacity:0;pointer-events:none;";
       document.body.appendChild(iframe);
 
       let settled = false;
@@ -275,22 +301,23 @@
       }
 
       function onMsg(e) {
-        const d = e.data;
-        if (!d || d.channel !== "kisskh") return;
-        if (e.source !== iframe.contentWindow) return;
-        if (
+        const d = parseKisskhMessage(e);
+        if (!d || e.source !== iframe.contentWindow) return;
+
+        if (d.type === "watching-log") {
+          cleanup(true);
+          return;
+        }
+        if (d.channel !== "kisskh") return;
+
+        if (d.event === "time" || d.event === "complete") {
+          cleanup(true);
+        } else if (
           d.event === "error" ||
           d.event === "unavailable" ||
           d.event === "no_source"
         ) {
           cleanup(false);
-        } else if (
-          d.event === "ready" ||
-          d.event === "play" ||
-          d.event === "loaded" ||
-          d.event === "init"
-        ) {
-          cleanup(true);
         }
       }
 
@@ -298,7 +325,7 @@
 
       setTimeout(() => {
         cleanup(false);
-      }, 2000);
+      }, 6000);
     });
   }
 
@@ -1308,7 +1335,7 @@
     }
 
     function onPlayerMessage(e) {
-      const d = e.data;
+      const d = parseKisskhMessage(e);
       if (!d || d.channel !== "kisskh") return;
       const iframe = app.querySelector("iframe");
       if (!iframe || e.source !== iframe.contentWindow) return;
