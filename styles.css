@@ -963,7 +963,8 @@ select:focus {
 .about-discord-icon {
   position: absolute;
   top: 88px;
-  left: 24px;
+  left: 50%;
+  transform: translateX(-50%);
   width: 64px;
   height: 64px;
   border-radius: 50%;
@@ -973,6 +974,7 @@ select:focus {
 
 .about-discord-body {
   padding: 44px 24px 24px;
+  text-align: center;
 }
 
 .about-discord-name {
@@ -1002,6 +1004,7 @@ select:focus {
 .about-discord-meta {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   font-size: 13px;
   color: var(--text-muted);
@@ -1034,7 +1037,9 @@ select:focus {
 }
 
 .about-discord .btn {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
+  margin: 0 auto;
   align-items: center;
   gap: 8px;
   padding: 6px 14px;
