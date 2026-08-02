@@ -5,6 +5,7 @@
 
   const MEDIA_FIELDS_SMALL = `
     id
+    idMal
     title { romaji english }
     coverImage { extraLarge large color }
     format status episodes averageScore season seasonYear
@@ -118,6 +119,7 @@
     watchlist: "anicult_watchlist",
     history: "anicult_history",
     progress: "anicult_progress",
+    dubCache: "anicult_dub_cache",
   };
 
   function storageGet(key) {
@@ -130,6 +132,99 @@
   }
   function storageSet(key, value) {
     localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function getDubCache() {
+    return storageGet(KEYS.dubCache) || {};
+  }
+
+  function setDubCached(id, episode, isAvailable) {
+    if (typeof episode === "boolean") {
+      isAvailable = episode;
+      episode = 1;
+    }
+    const cache = getDubCache();
+    const epKey = id + "_" + (episode || 1);
+    cache[epKey] = { available: isAvailable, timestamp: Date.now() };
+    if (!isAvailable) {
+      const currentMax = cache[id + "_max_dub"];
+      cache[id + "_max_dub"] = Math.min(
+        currentMax !== undefined ? currentMax : 9999,
+        (episode || 1) - 1,
+      );
+    }
+    if (!isAvailable || episode === 1 || cache[id] === undefined) {
+      cache[id] = { available: isAvailable, timestamp: Date.now() };
+    }
+    storageSet(KEYS.dubCache, cache);
+  }
+
+  function isDubCached(id, episode = null) {
+    const cache = getDubCache();
+    if (episode) {
+      const epEntry = cache[id + "_" + episode];
+      if (epEntry !== undefined) {
+        if (typeof epEntry === "boolean") return epEntry;
+        if (typeof epEntry === "object" && epEntry !== null) return epEntry.available;
+      }
+      const maxDub = cache[id + "_max_dub"];
+      if (maxDub !== undefined && episode > maxDub) {
+        return false;
+      }
+    }
+    const entry = cache[id];
+    if (entry === undefined) return null;
+    if (typeof entry === "boolean") return entry;
+    if (typeof entry === "object" && entry !== null) return entry.available;
+    return null;
+  }
+
+  function probeDub(anime, episode = 1) {
+    const cached = isDubCached(anime.id, episode);
+    if (cached !== null) return Promise.resolve(cached);
+
+    return new Promise((resolve) => {
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = makeEmbedUrl(episode, anime.id, "dub", anime.idMal || null);
+      document.body.appendChild(iframe);
+
+      let settled = false;
+      function cleanup(res) {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener("message", onMsg);
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+        setDubCached(anime.id, episode, res);
+        resolve(res);
+      }
+
+      function onMsg(e) {
+        const d = e.data;
+        if (!d || d.channel !== "kisskh") return;
+        if (e.source !== iframe.contentWindow) return;
+        if (
+          d.event === "error" ||
+          d.event === "unavailable" ||
+          d.event === "no_source"
+        ) {
+          cleanup(false);
+        } else if (
+          d.event === "ready" ||
+          d.event === "play" ||
+          d.event === "loaded" ||
+          d.event === "init"
+        ) {
+          cleanup(true);
+        }
+      }
+
+      window.addEventListener("message", onMsg);
+
+      setTimeout(() => {
+        cleanup(false);
+      }, 2000);
+    });
   }
 
   function getWatchlist() {
@@ -237,11 +332,13 @@
     const score = anime.averageScore;
     const fmt = anime.format;
     const ep = epText(anime);
+    const isDub = isDubCached(anime.id) === true;
     return `<a href="#/anime/${anime.id}" class="card" id="card-${anime.id}">
       <div class="card-image">
         <img src="${esc(img)}" alt="${esc(t)}" loading="lazy">
         ${score ? `<span class="card-score">${score}%</span>` : ""}
         ${fmt ? `<span class="card-format">${esc(fmt)}</span>` : ""}
+        ${isDub ? `<span class="card-dub">DUB</span>` : ""}
         ${ep ? `<span class="card-ep">${esc(ep)}</span>` : ""}
       </div>
       <div class="card-body"><div class="card-title">${esc(t)}</div></div>
@@ -463,10 +560,21 @@
     const page = parseInt(params.get("page")) || 1;
     const format = params.get("format") || "";
     const sort = params.get("sort") || (q ? "SEARCH_MATCH" : "TRENDING_DESC");
+    const dub = params.get("dub") === "1" || params.get("dubbed") === "1";
 
     let result;
     if (q) result = await searchAnime(q, page, 24, format || null, sort);
     else result = await browseAnime(page, 24, sort, format || null);
+
+    if (dub && result && result.media) {
+      const unknownItems = result.media.filter(
+        (a) => isDubCached(a.id) === null,
+      );
+      if (unknownItems.length > 0) {
+        await Promise.all(unknownItems.map((a) => probeDub(a)));
+      }
+      result.media = result.media.filter((a) => isDubCached(a.id) === true);
+    }
 
     const sortOpts = [
       { v: "SEARCH_MATCH", l: "Relevance" },
@@ -486,7 +594,14 @@
     ];
 
     function buildUrl(overrides) {
-      const p = { q, page: String(page), format, sort, ...overrides };
+      const p = {
+        q,
+        page: String(page),
+        format,
+        sort,
+        dub: dub ? "1" : "",
+        ...overrides,
+      };
       const sp = new URLSearchParams();
       Object.entries(p).forEach(([k, v]) => {
         if (v) sp.set(k, v);
@@ -503,6 +618,8 @@
     fmtOpts.forEach((o) => {
       html += `<a href="${buildUrl({ format: o.v, page: "1" })}" class="btn btn-sm ${format === o.v ? "btn-primary" : "btn-outline"}">${o.l}</a>`;
     });
+    html += `<span style="color:var(--text-dim)">|</span>`;
+    html += `<a href="${buildUrl({ dub: dub ? "" : "1", page: "1" })}" class="btn btn-sm ${dub ? "btn-primary" : "btn-outline"}">${dub ? "✓ Dubbed" : "Dubbed"}</a>`;
     html += `</div>`;
 
     if (result.media.length === 0) {
@@ -513,11 +630,13 @@
           const t = title(a),
             img = cover(a),
             s = a.averageScore,
-            ep = epText(a);
+            ep = epText(a),
+            isDub = isDubCached(a.id) === true;
           return `<a href="#/anime/${a.id}" class="card" id="search-card-${a.id}">
           <div class="card-image"><img src="${esc(img)}" alt="${esc(t)}" loading="lazy">
             ${s ? `<span class="card-score">${s}%</span>` : ""}
             ${a.format ? `<span class="card-format">${esc(a.format)}</span>` : ""}
+            ${isDub ? `<span class="card-dub">DUB</span>` : ""}
             ${ep ? `<span class="card-ep">${esc(ep)}</span>` : ""}
           </div>
           <div class="card-body"><div class="card-title">${esc(t)}</div></div>
@@ -603,6 +722,7 @@
               .map((g) => `<span>${esc(g)}</span>`)
               .join("")}
             ${anime.averageScore ? `<span class="tag-accent">${anime.averageScore}%</span>` : ""}
+            ${isDubCached(anime.id) === true ? `<span class="tag-accent tag-dub">DUB</span>` : ""}
             ${statusBadge(status)}
           </div>
           <div class="detail-hero-desc">${esc(desc)}</div>
@@ -828,7 +948,16 @@
       loading = true,
       error = null,
       embedUrl = "",
-      currentLang = "sub";
+      currentLang = "sub",
+      isDubAvailable = isDubCached(anime.id);
+
+    if (isDubAvailable === null && canWatch) {
+      isDubAvailable = await probeDub(anime);
+    } else {
+      isDubAvailable = isDubAvailable === true;
+    }
+
+    if (!isDubAvailable) currentLang = "sub";
 
     function unavailableHtml() {
       if (notYetReleased) {
@@ -890,10 +1019,16 @@
       }
 
       if (canWatch) {
-        html += `<div class="player-lang-toggle">
-          <button class="lang-btn ${currentLang === "sub" ? "lang-btn-active" : ""}" data-lang="sub">Sub</button>
-          <button class="lang-btn ${currentLang === "dub" ? "lang-btn-active" : ""}" data-lang="dub">Dub</button>
-        </div>`;
+        if (isDubAvailable) {
+          html += `<div class="player-lang-toggle">
+            <button class="lang-btn ${currentLang === "sub" ? "lang-btn-active" : ""}" data-lang="sub">Sub</button>
+            <button class="lang-btn ${currentLang === "dub" ? "lang-btn-active" : ""}" data-lang="dub">Dub</button>
+          </div>`;
+        } else {
+          html += `<div class="player-lang-toggle">
+            <span class="lang-btn lang-btn-active" style="cursor:default">Subtitled</span>
+          </div>`;
+        }
       }
 
       if (sources.length > 2) {
@@ -985,6 +1120,13 @@
           location.hash = `#/watch/${anime.id}/${episode + 1}`;
         }
       } else if (d.event === "error" && !error) {
+        if (currentLang === "dub") {
+          setDubCached(anime.id, false);
+          isDubAvailable = false;
+          currentLang = "sub";
+          discoverSources();
+          return;
+        }
         error =
           d.message || "The video failed to load. Please try another source.";
         render();
@@ -1005,11 +1147,11 @@
 
       const malId = anime.idMal || null;
       const subUrl = makeEmbedUrl(episode, id, "sub", malId);
-      const dubUrl = makeEmbedUrl(episode, id, "dub", malId);
-      sources = [
-        { id: "sub", name: "Sub", url: subUrl },
-        { id: "dub", name: "Dub", url: dubUrl },
-      ];
+      sources = [{ id: "sub", name: "Sub", url: subUrl }];
+      if (isDubAvailable) {
+        const dubUrl = makeEmbedUrl(episode, id, "dub", malId);
+        sources.push({ id: "dub", name: "Dub", url: dubUrl });
+      }
       const langIdx = sources.findIndex((s) => s.id === currentLang);
       activeSource = langIdx >= 0 ? langIdx : 0;
       embedUrl = sources[activeSource].url;

@@ -414,6 +414,19 @@ select:focus {
   border-radius: 6px;
 }
 
+.card-dub {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: var(--accent);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+}
+
 .card-body {
   padding: 12px;
 }
