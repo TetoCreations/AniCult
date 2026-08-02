@@ -72,6 +72,8 @@ body {
   color: var(--text);
   line-height: 1.5;
   min-height: 100vh;
+  overflow-wrap: break-word;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-image:
@@ -703,16 +705,15 @@ select:focus {
 
 .player-info > div:first-child {
   min-width: 0;
-  overflow: hidden;
 }
 
 .player-title {
   display: block;
   font-size: 18px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 .player-episode {
@@ -861,9 +862,9 @@ select:focus {
 .history-title {
   font-size: 14px;
   font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.4;
+  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 .history-ep {
@@ -1164,6 +1165,7 @@ select:focus {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
   padding: 14px 18px;
   background: rgba(96, 165, 250, 0.06);
   border: 1px solid rgba(96, 165, 250, 0.2);
@@ -1201,6 +1203,7 @@ select:focus {
   font-size: 13px;
   color: var(--text-muted);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .player-unavailable {
@@ -1575,7 +1578,6 @@ select:focus {
 }
 
 .ep-progress-text {
-  white-space: nowrap;
   font-weight: 500;
 }
 
@@ -2061,11 +2063,10 @@ select:focus {
   }
 
   .hero-slide-meta {
-    height: 15px;
-    white-space: nowrap;
-    overflow: hidden;
     font-size: 11px;
     margin-bottom: 10px;
+    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
   }
 
   .hero-slide-actions {
