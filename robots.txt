@@ -1,3 +1,5 @@
+# AniCult — crawl policy: allow everything (single-page app; content is
+# client-rendered, so ranking relies on the sitemap + JSON-LD in index.html).
 User-agent: *
 Allow: /
 

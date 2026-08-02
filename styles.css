@@ -1,3 +1,31 @@
+/* ============================================================================
+   ANICULT — stylesheet for the anime streaming SPA (see app.js for structure)
+   Single dark-theme CSS file, ordered top-to-bottom by component:
+     1.  Design tokens (CSS variables)
+     2.  Reset & base element styles
+     3.  Navbar (desktop + mobile hamburger menu)
+     4.  Navbar search & page layout container
+     5.  Section headers & grid layouts
+     6.  Anime cards
+     7.  Episode grids & episode buttons
+     8.  Action buttons
+     9.  Player page
+    10.  Empty states, pagination & search filters
+    11.  Watch history
+    12.  About page
+    13.  Horizontal scroll rows
+    14.  Embed error / next-episode banner / unavailable player states
+    15.  Sub-Dub language toggle & custom URL input
+    16.  Loading spinners & watchlist extras
+    17.  Anime detail page (hero, stats, synopsis)
+    18.  Episode button states (aired / upcoming / TBA) & status badges
+    19.  Home hero slideshow
+    20.  Responsive breakpoints (768px / 480px)
+   ============================================================================ */
+
+/* ----------------------------------------------------------------------------
+   1. DESIGN TOKENS — single source of truth for colors, spacing, radius, etc.
+   ---------------------------------------------------------------------------- */
 :root {
   --bg: #08080c;
   --bg-card: #12121a;
@@ -20,6 +48,10 @@
   --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ----------------------------------------------------------------------------
+   2. RESET & BASE — global box-sizing, typography, scrollbars, form controls.
+   Body background uses subtle radial accents to break up the flat dark tone.
+   ---------------------------------------------------------------------------- */
 *,
 *::before,
 *::after {
@@ -220,6 +252,13 @@ select:focus {
   transform: translateY(-7px) rotate(-45deg);
 }
 
+/* ----------------------------------------------------------------------------
+   20. RESPONSIVE BREAKPOINTS
+   - ≤960px  : nav collapses to hamburger menu
+   - ≤768px  : hero / detail hero / player stack vertically, grids shrink
+   - ≥769px  : about page grid widens
+   - ≤480px  : 3-column card grid on small phones
+   ---------------------------------------------------------------------------- */
 @media (max-width: 960px) {
   .nav-toggle {
     display: flex;
@@ -297,6 +336,10 @@ select:focus {
   padding: calc(var(--nav-height) + 24px) 24px 48px;
 }
 
+/* ----------------------------------------------------------------------------
+   5. SECTION HEADERS & GRID LAYOUTS
+   .grid = responsive auto-fill cards grid; .grid-wide = larger cards.
+   ---------------------------------------------------------------------------- */
 .section {
   margin-bottom: 40px;
 }
@@ -333,6 +376,11 @@ select:focus {
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 }
 
+/* ----------------------------------------------------------------------------
+   6. ANIME CARDS — reusable card used across home feeds, search & lists.
+   Overlay badges: score (top-left), format (top-right), episode count
+   (bottom-left), DUB (bottom-right). Title is clamped to 2 lines.
+   ---------------------------------------------------------------------------- */
 .card {
   display: block;
   border-radius: var(--radius-lg);
@@ -441,6 +489,11 @@ select:focus {
   overflow: hidden;
 }
 
+/* ----------------------------------------------------------------------------
+   7. EPISODE GRIDS & EPISODE BUTTONS
+   Base .ep-btn plus state modifiers (watched / current) applied by the
+   episode availability logic in app.js.
+   ---------------------------------------------------------------------------- */
 .episodes-title {
   font-size: 16px;
   font-weight: 600;
@@ -552,6 +605,11 @@ select:focus {
   border-radius: 6px;
 }
 
+/* ----------------------------------------------------------------------------
+   9. PLAYER PAGE — centered 16:9 embed wrapper, episode badge overlay,
+   next-episode countdown banner, player header (title + prev/next) and
+   source selector buttons.
+   ---------------------------------------------------------------------------- */
 .player-container {
   max-width: 900px;
   margin: 0 auto;
@@ -696,6 +754,9 @@ select:focus {
   background: rgba(230, 57, 70, 0.08);
 }
 
+/* ----------------------------------------------------------------------------
+   10. EMPTY STATES, PAGINATION & SEARCH FILTERS
+   ---------------------------------------------------------------------------- */
 .empty {
   text-align: center;
   padding: 60px 20px;
@@ -757,6 +818,9 @@ select:focus {
   align-items: center;
 }
 
+/* ----------------------------------------------------------------------------
+   11. WATCH HISTORY — list rows with thumbnail + "Continue Watching" card.
+   ---------------------------------------------------------------------------- */
 .history-item {
   display: flex;
   align-items: center;
@@ -827,6 +891,10 @@ select:focus {
   margin-bottom: 32px;
 }
 
+/* ----------------------------------------------------------------------------
+   12. ABOUT PAGE — static content: feature list, community Discord card and
+   developer profile rows.
+   ---------------------------------------------------------------------------- */
 .about {
   max-width: 720px;
   margin: 0 auto;
@@ -1046,6 +1114,10 @@ select:focus {
   margin-bottom: 4px;
 }
 
+/* ----------------------------------------------------------------------------
+   13. HORIZONTAL SCROLL ROWS — used for Trending / Recently Updated /
+   Related sections; cards are fixed-width so the row scrolls instead of wraps.
+   ---------------------------------------------------------------------------- */
 .scroll-row {
   display: flex;
   gap: 16px;
@@ -1074,6 +1146,9 @@ select:focus {
   flex-shrink: 0;
 }
 
+/* ----------------------------------------------------------------------------
+   14. EMBED ERRORS, NEXT-EPISODE BANNER & UNAVAILABLE PLAYER STATES
+   ---------------------------------------------------------------------------- */
 .embed-error {
   padding: 10px 14px;
   background: rgba(230, 57, 70, 0.08);
@@ -1167,6 +1242,9 @@ select:focus {
   line-height: 1.6;
 }
 
+/* ----------------------------------------------------------------------------
+   15. SUB / DUB LANGUAGE TOGGLE & CUSTOM EMBED URL INPUT
+   ---------------------------------------------------------------------------- */
 .player-lang-toggle {
   display: flex;
   gap: 4px;
@@ -1210,6 +1288,9 @@ select:focus {
   font-size: 13px;
 }
 
+/* ----------------------------------------------------------------------------
+   16. LOADING SPINNERS & WATCHLIST EXTRAS
+   ---------------------------------------------------------------------------- */
 .loading-spinner {
   width: 32px;
   height: 32px;
@@ -1473,6 +1554,11 @@ select:focus {
   color: var(--text-muted);
 }
 
+/* ----------------------------------------------------------------------------
+   18. EPISODE BUTTON STATES (AIRED / UPCOMING / TODAY) + STATUS BADGES
+   The aria-disabled buttons keep their grid slot but show as locked, with
+   the next air date rendered as a countdown by app.js.
+   ---------------------------------------------------------------------------- */
 .ep-progress-bar {
   flex: 1;
   height: 4px;
@@ -1874,7 +1960,12 @@ select:focus {
 }
 
 @media (max-width: 768px) {
-  .hero-slideshow {
+/* ----------------------------------------------------------------------------
+   19. HOME HERO SLIDESHOW — full-width rotating banner (rank number,
+   cover, title, tags, description, CTA), auto-advancing with prev/next
+   arrows and dot indicators.
+   ---------------------------------------------------------------------------- */
+.hero-slideshow {
     width: calc(100% + 24px);
     margin-left: -12px;
     margin-top: 0;
@@ -1989,7 +2080,11 @@ select:focus {
     bottom: 12px;
   }
 
-  .detail-hero {
+/* ----------------------------------------------------------------------------
+   17. ANIME DETAIL PAGE — banner hero (banner art + cover + stats grid),
+   synopsis, and the episode availability section.
+   ---------------------------------------------------------------------------- */
+.detail-hero {
     width: calc(100% + 24px);
     margin-left: -12px;
     min-height: 360px;
@@ -2040,7 +2135,11 @@ select:focus {
 }
 
 @media (max-width: 768px) {
-  .nav {
+/* ----------------------------------------------------------------------------
+   3. NAVBAR — fixed top bar with logo, desktop links, and a hamburger toggle
+   that expands a full-width dropdown menu on screens ≤ 960px.
+   ---------------------------------------------------------------------------- */
+.nav {
     padding: 0 12px;
     gap: 12px;
   }
@@ -2082,7 +2181,11 @@ select:focus {
 }
 
 @media (max-width: 480px) {
-  .nav-search {
+/* ----------------------------------------------------------------------------
+   4. NAVBAR SEARCH & PAGE LAYOUT
+   .main is the SPA mount wrapper — every page renderer paints into #app.
+   ---------------------------------------------------------------------------- */
+.nav-search {
     margin-left: auto;
     flex: 1;
     min-width: 0;
@@ -2111,7 +2214,10 @@ select:focus {
     font-size: 12px;
   }
 
-  .btn {
+/* ----------------------------------------------------------------------------
+   8. ACTION BUTTONS — .btn base + variants (primary / outline / danger / sm).
+   ---------------------------------------------------------------------------- */
+.btn {
     padding: 6px 14px;
     font-size: 13px;
   }
