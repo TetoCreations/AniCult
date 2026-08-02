@@ -209,10 +209,10 @@
   }
 
   function title(anime) {
-    return anime.title.english || anime.title.romaji;
+    return anime?.title?.english || anime?.title?.romaji || "";
   }
   function cover(anime) {
-    return anime.coverImage.extraLarge || anime.coverImage.large;
+    return anime?.coverImage?.extraLarge || anime?.coverImage?.large || "";
   }
   function epText(anime) {
     if (anime.nextAiringEpisode)
@@ -913,10 +913,11 @@
       }
 
       if (totalEps > 0) {
+        const watched = getProgress(anime.id);
         html += `<div style="margin-top:24px"><h3 class="episodes-title" style="margin-bottom:12px">Episodes</h3><div class="episodes-grid">`;
         for (let i = 1; i <= totalEps; i++) {
           const isUpcoming = nextEp && i >= nextEp && isAiring;
-          const isWatched = i <= getProgress(anime.id);
+          const isWatched = i <= watched;
           let cls = "ep-btn";
           if (i === episode) cls += " ep-btn-current";
           else if (isWatched) cls += " ep-btn-watched";
@@ -1101,7 +1102,7 @@
       const latest = historyList[0];
       if (latest) {
         html += `<div class="continue-card" id="continue-watching-card">
-          <div class="history-thumb"><img src="${esc(latest.coverImage.extraLarge || latest.coverImage.large)}" alt="${esc(latest.title)}"></div>
+          <div class="history-thumb"><img src="${esc(latest.coverImage?.extraLarge || latest.coverImage?.large || "")}" alt="${esc(latest.title)}"></div>
           <div class="history-info">
             <div class="continue-label">Continue Watching</div>
             <h2 class="history-title" style="font-size:16px;font-weight:600">${esc(latest.title)}</h2>
@@ -1120,7 +1121,7 @@
             minute: "2-digit",
           });
           return `<div class="history-item" id="history-item-${i}">
-          <div class="history-thumb"><img src="${esc(item.coverImage.extraLarge || item.coverImage.large)}" alt="${esc(item.title)}"></div>
+          <div class="history-thumb"><img src="${esc(item.coverImage?.extraLarge || item.coverImage?.large || "")}" alt="${esc(item.title)}"></div>
           <div class="history-info">
             <a href="#/anime/${item.animeId}" class="history-title" style="font-weight:600;display:block">${esc(item.title)}</a>
             <div class="history-ep">Episode ${item.episode}</div>
