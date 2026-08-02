@@ -106,8 +106,13 @@
   }
 
   async function getAnimeById(id) {
-    const q = `query($id:Int){Media(id:$id,type:ANIME){${MEDIA_FIELDS}}}`;
-    return (await gql(q, { id: parseInt(id) })).Media;
+    const q = `query($id:Int){Media(id:$id,type:ANIME){${MEDIA_FIELDS}} Page(perPage:1){airingSchedules(mediaId:$id,notYetAired:false,sort:TIME_DESC){episode}}}`;
+    const data = await gql(q, { id: parseInt(id) });
+    const media = data.Media;
+    const latestAired =
+      data.Page && data.Page.airingSchedules && data.Page.airingSchedules[0];
+    if (latestAired) media.latestAired = latestAired.episode;
+    return media;
   }
 
   async function getTopAiring(page = 1, perPage = 10) {
@@ -309,9 +314,62 @@
   function cover(anime) {
     return anime.coverImage.extraLarge || anime.coverImage.large;
   }
+  // -------- episode availability logic --------
+  // `episodes` is the *planned* total, which can exceed what has actually
+  // aired (batch releases, hiatus, unknown schedules). The reliable source of
+  // truth is the most recently aired episode from AniList's airing schedule
+  // (`latestAired`), falling back to nextAiringEpisode - 1 when available.
+
+  function getAiredCount(anime) {
+    if (!anime) return 0;
+    const scheduleLatest = anime.latestAired || 0;
+    const nextAired = anime.nextAiringEpisode && anime.nextAiringEpisode.episode
+      ? anime.nextAiringEpisode.episode - 1
+      : 0;
+    if (anime.status === "FINISHED") {
+      return anime.episodes || Math.max(scheduleLatest, nextAired) || 0;
+    }
+    if (anime.status === "NOT_YET_RELEASED") return 0;
+    return Math.max(scheduleLatest, nextAired);
+  }
+
+  function getPlannedCount(anime) {
+    if (!anime) return 0;
+    if (anime.episodes) return anime.episodes;
+    if (anime.nextAiringEpisode && anime.nextAiringEpisode.episode)
+      return anime.nextAiringEpisode.episode;
+    return getAiredCount(anime);
+  }
+
+  function isEpisodeReleased(anime, episode) {
+    return episode >= 1 && episode <= getAiredCount(anime);
+  }
+
+  function upcomingEpLabel(anime, i) {
+    const nextEp = anime.nextAiringEpisode && anime.nextAiringEpisode.episode;
+    const nextEpDate =
+      anime.nextAiringEpisode && anime.nextAiringEpisode.airingAt;
+    if (nextEp === i && nextEpDate) {
+      const diff = nextEpDate * 1000 - Date.now();
+      if (diff > 0) {
+        const days = Math.floor(diff / 86400000);
+        const hours = Math.floor((diff % 86400000) / 3600000);
+        if (days < 1)
+          return { text: hours > 0 ? `${hours}h` : "<1h", today: true };
+        return { text: `${days}d`, today: false };
+      }
+    }
+    return { text: "TBA", today: false };
+  }
+
   function epText(anime) {
     if (anime.nextAiringEpisode)
       return "Ep " + (anime.nextAiringEpisode.episode - 1);
+    if (anime.status === "FINISHED")
+      return anime.episodes ? anime.episodes + " eps" : null;
+    if (anime.status === "RELEASING") return "Airing";
+    if (anime.status === "HIATUS") return "On Hiatus";
+    if (anime.status === "NOT_YET_RELEASED") return "Unreleased";
     return anime.episodes ? anime.episodes + " eps" : null;
   }
 
@@ -399,7 +457,8 @@
         const bg = anime.bannerImage || cover(anime);
         const desc = stripHtml(anime.description || "");
         const nxt = anime.nextAiringEpisode;
-        const aired = nxt ? nxt.episode - 1 : anime.episodes || "?";
+        const aired = getAiredCount(anime);
+        const airedText = aired > 0 ? aired : "?";
         let airMeta = "";
         if (nxt) {
           const diff = nxt.airingAt * 1000 - Date.now();
@@ -426,7 +485,7 @@
                   ${anime.averageScore ? `<span class="tag-accent">${anime.averageScore}%</span>` : ""}
                 </div>
                 <div class="hero-slide-desc">${esc(desc)}</div>
-                <div class="hero-slide-meta">${anime.format || "TV"} · ${aired} eps aired${airMeta ? " · " + esc(airMeta) : ""}</div>
+                <div class="hero-slide-meta">${anime.format || "TV"} · ${airedText} eps aired${airMeta ? " · " + esc(airMeta) : ""}</div>
                 <div class="hero-slide-actions">
                   <a href="#/anime/${anime.id}" class="btn btn-primary">View Details</a>
                   ${aired > 0 ? `<a href="#/watch/${anime.id}/1" class="btn btn-outline">Watch Now</a>` : ""}
@@ -679,23 +738,24 @@
       engT && anime.title.romaji !== engT ? anime.title.romaji : nativeT || "";
     const img = cover(anime);
     const banner = anime.bannerImage || img;
-    const nextEp = anime.nextAiringEpisode?.episode;
-    const nextEpDate = anime.nextAiringEpisode?.airingAt;
-    const totalKnown = anime.episodes || nextEp || 0;
+    const nextEp = anime.nextAiringEpisode?.episode || null;
+    const nextEpDate = anime.nextAiringEpisode?.airingAt || null;
+    const airedEps = getAiredCount(anime);
+    const plannedEps = getPlannedCount(anime);
+    const totalKnown = Math.max(airedEps, plannedEps, nextEp || 0);
     const studio = anime.studios?.nodes?.[0]?.name || "Unknown";
     const desc = stripHtml(anime.description);
     const watched = getProgress(anime.id);
     const inList = isInWatchlist(anime.id);
     const status = anime.status || "";
     const isAiring = status === "RELEASING";
-    const airedEps = isAiring && nextEp ? nextEp - 1 : anime.episodes || 0;
 
     const relations = (anime.relations?.edges || []).filter((e) =>
       ["SEQUEL", "PREQUEL", "SIDE_STORY", "PARENT"].includes(e.relationType),
     );
 
     let ctaHtml = "";
-    if (totalKnown > 0 && airedEps > 0) {
+    if (airedEps > 0) {
       const resumeEp = watched + 1;
       if (watched > 0 && resumeEp <= airedEps) {
         ctaHtml = `<a href="#/watch/${anime.id}/${resumeEp}" class="btn btn-primary">Continue Ep ${resumeEp}</a>`;
@@ -751,7 +811,14 @@
       },
       {
         label: "Episodes",
-        value: anime.episodes ? String(anime.episodes) : nextEp ? "?" : "—",
+        value: isAiring
+          ? (airedEps > 0 ? String(airedEps) : "—") +
+            (anime.episodes ? " / " + anime.episodes : "")
+          : anime.episodes
+            ? String(anime.episodes)
+            : airedEps > 0
+              ? String(airedEps)
+              : "—",
       },
       {
         label: "Duration",
@@ -780,11 +847,11 @@
         : 0;
       html += `<div class="detail-section"><div class="detail-section-title">Episodes</div>`;
       html += `<div class="ep-progress">
-        <span class="ep-progress-text">${watched} ${isAiring && nextEp ? "of " + (nextEp - 1) : anime.episodes ? "of " + anime.episodes : ""} watched</span>
+        <span class="ep-progress-text">${watched} ${isAiring && airedEps > 0 ? "of " + airedEps + " released" : anime.episodes ? "of " + anime.episodes : ""} watched</span>
         <div class="ep-progress-bar"><div class="ep-progress-fill" style="width:${progressPct}%"></div></div>
       </div>`;
 
-      if (isAiring && nextEp && nextEpDate) {
+      if (nextEp && nextEpDate) {
         const diff = nextEpDate * 1000 - Date.now();
         if (diff > 0) {
           const days = Math.floor(diff / 86400000);
@@ -811,42 +878,26 @@
       }
       html += `<div class="episodes-grid">`;
       for (let i = 1; i <= totalKnown; i++) {
-        const isUpcoming = nextEp && i >= nextEp && status !== "FINISHED";
-        const isNextEp = nextEp && i === nextEp && status !== "FINISHED";
-        const isAired = !isUpcoming;
+        const isReleased = i <= airedEps;
         const isWatched = i <= watched;
 
         let cls = "ep-btn";
         let attrs = "";
         let airLabel = "";
+        let lbl = null;
 
-        if (isWatched) {
-          cls += " ep-btn-watched";
-          attrs = `href="#/watch/${anime.id}/${i}"`;
-        } else if (isAired || !isUpcoming) {
-          cls += " ep-btn-aired";
+        if (isReleased) {
+          cls += isWatched ? " ep-btn-watched" : " ep-btn-aired";
           attrs = `href="#/watch/${anime.id}/${i}"`;
         } else {
           cls += " ep-btn-upcoming";
-          if (isNextEp && nextEpDate) {
-            const diff = nextEpDate * 1000 - Date.now();
-            if (diff > 0) {
-              const days = Math.floor(diff / 86400000);
-              const hours = Math.floor((diff % 86400000) / 3600000);
-              if (days < 1) {
-                airLabel = hours > 0 ? `${hours}h` : "<1h";
-                cls += " ep-btn-today";
-              } else {
-                airLabel = `${days}d`;
-              }
-            }
-          }
+          lbl = upcomingEpLabel(anime, i);
+          airLabel = lbl.text;
+          if (lbl.today) cls += " ep-btn-today";
         }
 
-        const isSoon =
-          airLabel && nextEpDate && nextEpDate * 1000 - Date.now() < 86400000;
         if (attrs) {
-          html += `<a ${attrs} class="${cls}" id="ep-${i}">${i}${airLabel ? `<div class="ep-air-date${isSoon ? " today-date" : " upcoming-date"}">${esc(airLabel)}</div>` : ""}</a>`;
+          html += `<a ${attrs} class="${cls}" id="ep-${i}">${i}${airLabel ? `<div class="ep-air-date${lbl && lbl.today ? " today-date" : " upcoming-date"}">${esc(airLabel)}</div>` : ""}</a>`;
         } else {
           html += `<span class="${cls}" id="ep-${i}">${i}${airLabel ? `<div class="ep-air-date upcoming-date">${esc(airLabel)}</div>` : ""}</span>`;
         }
@@ -923,15 +974,17 @@
   async function renderWatch(id, episode) {
     const anime = await getAnimeById(id);
     const t = title(anime);
-    const totalEps =
-      anime.episodes ||
-      (anime.nextAiringEpisode ? anime.nextAiringEpisode.episode - 1 : 0);
-    const nextEp = anime.nextAiringEpisode?.episode;
-    const nextEpDate = anime.nextAiringEpisode?.airingAt;
-    const isAiring = anime.status === "RELEASING";
+    const airedEps = getAiredCount(anime);
+    const plannedEps = getPlannedCount(anime);
+    const totalEps = Math.max(
+      airedEps,
+      plannedEps,
+      anime.nextAiringEpisode ? anime.nextAiringEpisode.episode : 0,
+    );
+    const nextEp = anime.nextAiringEpisode?.episode || null;
+    const nextEpDate = anime.nextAiringEpisode?.airingAt || null;
     const notYetReleased = anime.status === "NOT_YET_RELEASED";
-    const epUnreleased = isAiring && nextEp && episode >= nextEp;
-    const canWatch = !notYetReleased && !epUnreleased;
+    const canWatch = isEpisodeReleased(anime, episode);
 
     if (canWatch) {
       addToHistory({
@@ -967,12 +1020,21 @@
           <div class="unavailable-text">"${esc(t)}" has not been released online yet. It will be added to AniCult as soon as it airs on streaming platforms.</div>
         </div>`;
       }
-      if (epUnreleased) {
+      if (!canWatch) {
+        const latestText =
+          airedEps > 0
+            ? `The latest released episode is Episode ${airedEps}.`
+            : "No episodes have been released yet.";
+        let countdownHtml = "";
+        if (nextEp && nextEpDate) {
+          countdownHtml = `<div class="unavailable-countdown">${nextEp === episode ? "Airs in" : `Episode ${nextEp} airs in`} <span id="countdown-timer">${esc(formatCountdown(nextEpDate))}</span></div>`;
+        }
         return `<div class="player-unavailable">
           <div class="unavailable-icon">${icons.clock(36)}</div>
           <div class="unavailable-title">Episode ${episode} hasn't aired yet</div>
-          <div class="unavailable-countdown">Airs in <span id="countdown-timer">${esc(formatCountdown(nextEpDate))}</span></div>
-          <div class="unavailable-text">This episode becomes available here as soon as it airs on streaming platforms.</div>
+          ${countdownHtml}
+          <div class="unavailable-text">${latestText} ${nextEpDate ? "This episode becomes available here as soon as it airs on streaming platforms." : "The release schedule for upcoming episodes is currently unknown. Check back later."}</div>
+          ${airedEps > 0 ? `<a href="#/watch/${anime.id}/${airedEps}" class="btn btn-primary">Watch Latest Episode</a>` : ""}
         </div>`;
       }
       return `<div class="player-unavailable">
@@ -989,9 +1051,9 @@
         <a href="#/anime/${anime.id}" class="player-title">${esc(t)}</a>
         <div class="player-episode">Episode ${episode}</div>
       </div><div class="player-nav">`;
-      if (episode > 1 && (!isAiring || !nextEp || episode - 1 < nextEp))
+      if (episode > 1)
         html += `<a href="#/watch/${anime.id}/${episode - 1}" class="btn btn-outline btn-sm">${icons.arrowLeft()} Prev</a>`;
-      if (episode < totalEps && (!isAiring || !nextEp || episode + 1 < nextEp))
+      if (episode < airedEps)
         html += `<a href="#/watch/${anime.id}/${episode + 1}" class="btn btn-primary btn-sm">Next ${icons.arrowRight()}</a>`;
       html += `</div></div>`;
 
@@ -1008,7 +1070,7 @@
       }
       html += `</div>`;
 
-      if (isAiring && nextEp && nextEpDate && !epUnreleased) {
+      if (canWatch && nextEp && nextEpDate) {
         const diff = nextEpDate * 1000 - Date.now();
         if (diff > 0) {
           html += `<div class="watch-countdown">
@@ -1050,17 +1112,18 @@
       if (totalEps > 0) {
         html += `<div style="margin-top:24px"><h3 class="episodes-title" style="margin-bottom:12px">Episodes</h3><div class="episodes-grid">`;
         for (let i = 1; i <= totalEps; i++) {
-          const isUpcoming = nextEp && i >= nextEp && isAiring;
+          const isReleased = i <= airedEps;
           const isWatched = i <= getProgress(anime.id);
           let cls = "ep-btn";
           if (i === episode) cls += " ep-btn-current";
-          else if (isWatched) cls += " ep-btn-watched";
-          else if (!isUpcoming) cls += " ep-btn-aired";
-          else cls += " ep-btn-upcoming";
-          if (isUpcoming) {
-            html += `<span class="${cls}" title="Not yet aired">${i}</span>`;
-          } else {
+          if (isReleased) {
+            cls += isWatched ? " ep-btn-watched" : " ep-btn-aired";
             html += `<a href="#/watch/${anime.id}/${i}" class="${cls}">${i}</a>`;
+          } else {
+            cls += " ep-btn-upcoming";
+            const lbl = upcomingEpLabel(anime, i);
+            if (lbl.today) cls += " ep-btn-today";
+            html += `<span class="${cls}" title="Not yet aired">${i}${lbl.text ? `<div class="ep-air-date upcoming-date">${esc(lbl.text)}</div>` : ""}</span>`;
           }
         }
         html += `</div></div>`;
@@ -1113,10 +1176,7 @@
       const iframe = app.querySelector("iframe");
       if (!iframe || e.source !== iframe.contentWindow) return;
       if (d.event === "complete") {
-        if (
-          episode < totalEps &&
-          (!isAiring || !nextEp || episode + 1 < nextEp)
-        ) {
+        if (episode < airedEps) {
           location.hash = `#/watch/${anime.id}/${episode + 1}`;
         }
       } else if (d.event === "error" && !error) {
@@ -1161,7 +1221,7 @@
 
     render();
 
-    const showCountdown = isAiring && nextEp && nextEpDate;
+    const showCountdown = nextEp && nextEpDate;
     const timer = showCountdown
       ? setInterval(() => {
           let alive = false;
