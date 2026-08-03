@@ -1967,12 +1967,12 @@ select:focus {
 }
 
 @media (max-width: 768px) {
-/* ----------------------------------------------------------------------------
+  /* ----------------------------------------------------------------------------
    19. HOME HERO SLIDESHOW — full-width rotating banner (rank number,
    cover, title, tags, description, CTA), auto-advancing with prev/next
    arrows and dot indicators.
    ---------------------------------------------------------------------------- */
-.hero-slideshow {
+  .hero-slideshow {
     width: calc(100% + 24px);
     margin-left: -12px;
     margin-top: 0;
@@ -2086,11 +2086,11 @@ select:focus {
     bottom: 12px;
   }
 
-/* ----------------------------------------------------------------------------
+  /* ----------------------------------------------------------------------------
    17. ANIME DETAIL PAGE — banner hero (banner art + cover + stats grid),
    synopsis, and the episode availability section.
    ---------------------------------------------------------------------------- */
-.detail-hero {
+  .detail-hero {
     width: calc(100% + 24px);
     margin-left: -12px;
     min-height: 360px;
@@ -2141,11 +2141,11 @@ select:focus {
 }
 
 @media (max-width: 768px) {
-/* ----------------------------------------------------------------------------
+  /* ----------------------------------------------------------------------------
    3. NAVBAR — fixed top bar with logo, desktop links, and a hamburger toggle
    that expands a full-width dropdown menu on screens ≤ 960px.
    ---------------------------------------------------------------------------- */
-.nav {
+  .nav {
     padding: 0 12px;
     gap: 12px;
   }
@@ -2187,11 +2187,11 @@ select:focus {
 }
 
 @media (max-width: 480px) {
-/* ----------------------------------------------------------------------------
+  /* ----------------------------------------------------------------------------
    4. NAVBAR SEARCH & PAGE LAYOUT
    .main is the SPA mount wrapper — every page renderer paints into #app.
    ---------------------------------------------------------------------------- */
-.nav-search {
+  .nav-search {
     margin-left: auto;
     flex: 1;
     min-width: 0;
@@ -2220,10 +2220,10 @@ select:focus {
     font-size: 12px;
   }
 
-/* ----------------------------------------------------------------------------
+  /* ----------------------------------------------------------------------------
    8. ACTION BUTTONS — .btn base + variants (primary / outline / danger / sm).
    ---------------------------------------------------------------------------- */
-.btn {
+  .btn {
     padding: 6px 14px;
     font-size: 13px;
   }

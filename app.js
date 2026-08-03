@@ -237,7 +237,8 @@
       const epEntry = cache[id + "_" + episode];
       if (epEntry !== undefined) {
         if (typeof epEntry === "boolean") return epEntry;
-        if (typeof epEntry === "object" && epEntry !== null) return epEntry.available;
+        if (typeof epEntry === "object" && epEntry !== null)
+          return epEntry.available;
       }
       const maxDub = cache[id + "_max_dub"];
       if (maxDub !== undefined && episode > maxDub) {
@@ -443,9 +444,10 @@
   function getAiredCount(anime) {
     if (!anime) return 0;
     const scheduleLatest = anime.latestAired || 0;
-    const nextAired = anime.nextAiringEpisode && anime.nextAiringEpisode.episode
-      ? anime.nextAiringEpisode.episode - 1
-      : 0;
+    const nextAired =
+      anime.nextAiringEpisode && anime.nextAiringEpisode.episode
+        ? anime.nextAiringEpisode.episode - 1
+        : 0;
     if (anime.status === "FINISHED") {
       return anime.episodes || Math.max(scheduleLatest, nextAired) || 0;
     }
