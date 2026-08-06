@@ -1548,6 +1548,17 @@
     html += `<a class="about-row" href="https://syedtanvir.vercel.app" target="_blank" rel="noopener noreferrer"><img class="about-portfolio-logo" src="https://syedtanvir.vercel.app/assets/icon.png" alt="Portfolio" loading="lazy"><span class="about-card-text"><span class="about-link-title">Portfolio</span><span class="about-link-text">syedtanvir.vercel.app</span></span></a>`;
     html += `</div>`;
     html += `</div>`;
+
+    html += `<div class="about-more">`;
+    html += `<div class="about-dev-header"><span class="about-dev-badge">More of Us</span></div>`;
+    html += `<a class="about-platform" href="https://movicult.vercel.app" target="_blank" rel="noopener noreferrer">`;
+    html += `<img class="about-platform-logo" src="https://movicult.vercel.app/logo.png" alt="MoviCult logo" loading="lazy">`;
+    html += `<div class="about-platform-body">`;
+    html += `<div class="about-link-title">MoviCult</div>`;
+    html += `<div class="about-platform-desc">Free movies and TV shows without ads. Stream the latest movies and hit TV series in full HD — no sign-up required, no interruptions, just press play and enjoy.</div>`;
+    html += `<span class="btn btn-primary about-platform-cta">Visit MoviCult</span>`;
+    html += `</div>`;
+    html += `</a>`;
     html += `</div>`;
 
     app.innerHTML = html;
