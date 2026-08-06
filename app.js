@@ -1229,7 +1229,6 @@
         html += unavailableHtml();
       } else if (embedUrl) {
         html += `<iframe src="${esc(embedUrl)}" allowfullscreen loading="lazy" allow="autoplay; fullscreen"></iframe>`;
-        html += `<div class="episode-badge">Episode ${episode}</div>`;
       } else {
         html += unavailableHtml();
       }
