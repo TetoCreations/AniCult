@@ -1167,10 +1167,10 @@
       error = null,
       embedUrl = "",
       currentLang = "sub",
-      isDubAvailable = isDubCached(anime.id);
+      isDubAvailable = isDubCached(anime.id, episode);
 
     if (isDubAvailable === null && canWatch) {
-      isDubAvailable = await probeDub(anime);
+      isDubAvailable = await probeDub(anime, episode);
     } else {
       isDubAvailable = isDubAvailable === true;
     }
@@ -1347,7 +1347,7 @@
         }
       } else if (d.event === "error" && !error) {
         if (currentLang === "dub") {
-          setDubCached(anime.id, false);
+          setDubCached(anime.id, episode, false);
           isDubAvailable = false;
           currentLang = "sub";
           discoverSources();
