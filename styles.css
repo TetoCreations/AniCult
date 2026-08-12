@@ -36,7 +36,6 @@
   --text-dim: #505060;
   --accent: #e63946;
   --accent-hover: #d32f3f;
-  --accent-glow: rgba(230, 57, 70, 0.15);
   --border: #1e1e2a;
   --border-hover: #2a2a3a;
   --radius: 10px;
@@ -239,7 +238,7 @@ select:focus {
   height: 2px;
   background: var(--text);
   border-radius: 1px;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
 .nav-toggle.open span:nth-child(1) {
@@ -292,7 +291,10 @@ select:focus {
     font-size: 14px;
     width: 100%;
     border-left: 3px solid transparent;
-    transition: all var(--transition);
+    transition:
+      color var(--transition),
+      background var(--transition),
+      border-left-color var(--transition);
   }
 
   .nav-links a:hover {
@@ -325,7 +327,7 @@ select:focus {
   border-radius: var(--radius);
   font-size: 14px;
   font-weight: 500;
-  transition: all var(--transition);
+  transition: background var(--transition);
 }
 
 .nav-search button:hover {
@@ -344,6 +346,10 @@ select:focus {
    ---------------------------------------------------------------------------- */
 .section {
   margin-bottom: 40px;
+  /* Skip style/layout/paint of off-screen sections while scrolling long
+     feeds — each row is rendered only as it approaches the viewport. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 520px;
 }
 
 .section-header {
@@ -519,7 +525,11 @@ select:focus {
   border: 1px solid var(--border);
   color: var(--text-muted);
   cursor: pointer;
-  transition: all var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition),
+    border-color var(--transition),
+    transform var(--transition);
 }
 
 .ep-btn:hover {
@@ -555,7 +565,11 @@ select:focus {
   font-weight: 500;
   border-radius: var(--radius);
   cursor: pointer;
-  transition: all var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition),
+    border-color var(--transition),
+    transform var(--transition);
   text-decoration: none;
 }
 
@@ -629,31 +643,10 @@ select:focus {
   box-shadow: var(--shadow-lg);
 }
 
-.player-wrapper iframe,
-.player-wrapper video {
+.player-wrapper iframe {
   width: 100%;
   height: 100%;
   border: none;
-}
-
-.episode-badge {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 10;
-  background: rgba(8, 8, 12, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  padding: 10px 26px;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--text);
-  pointer-events: none;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
 }
 
 .watch-countdown {
@@ -741,7 +734,10 @@ select:focus {
   background: var(--bg-card);
   border: 1px solid var(--border);
   color: var(--text-muted);
-  transition: all var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .player-source-btn:hover {
@@ -791,7 +787,10 @@ select:focus {
   border: 1px solid var(--border);
   color: var(--text-muted);
   cursor: pointer;
-  transition: all var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .page-btn:hover {
@@ -831,7 +830,7 @@ select:focus {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   margin-bottom: 8px;
-  transition: all var(--transition);
+  transition: background var(--transition), border-color var(--transition);
 }
 
 .history-item:hover {
@@ -1335,7 +1334,7 @@ select:focus {
   color: var(--text-muted);
   border: none;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .lang-btn:hover {
@@ -1395,7 +1394,7 @@ select:focus {
   font-size: 10px;
   padding: 3px 8px;
   z-index: 2;
-  transition: all var(--transition);
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
 }
 
 .wl-remove-btn:hover {
@@ -1422,6 +1421,8 @@ select:focus {
   margin-bottom: 32px;
   display: flex;
   align-items: flex-end;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
 }
 
 .detail-hero-bg {
@@ -1585,6 +1586,16 @@ select:focus {
 
 .detail-section {
   margin-bottom: 32px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 360px;
+}
+
+/* Episode list on the watch page (can be hundreds of buttons for long
+   running shows — skip rendering it while it's off-screen). */
+.episodes-section {
+  margin-top: 24px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
 }
 
 .detail-section-title {
@@ -1772,6 +1783,8 @@ select:focus {
   overflow: hidden;
   margin-bottom: 40px;
   touch-action: pan-y;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 460px;
 }
 
 .hero-slide {
@@ -2015,7 +2028,7 @@ select:focus {
   border: none;
   cursor: pointer;
   padding: 0;
-  transition: all var(--transition);
+  transition: background var(--transition);
 }
 
 .hero-dot:hover {
@@ -2293,5 +2306,134 @@ select:focus {
   .btn-sm {
     padding: 4px 10px;
     font-size: 11px;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   21. TOUCH / NO-HOVER RENDERING PATH
+   Phones and other coarse-pointer devices pay for glassmorphism (backdrop
+   blur), hover lifts and image zoom on every scroll frame: the fixed nav
+   re-blurs everything passing under it, and every card badge keeps its own
+   blur layer. On devices that can't hover these effects carry no interactive
+   value, so swap them for opaque, flat equivalents. Desktop is untouched.
+   ---------------------------------------------------------------------------- */
+@media (hover: none) {
+  .nav,
+  .nav-links {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .nav {
+    background: rgba(8, 8, 12, 0.97);
+  }
+
+  .nav-links {
+    background: rgba(18, 18, 26, 0.98);
+  }
+
+  .card-score,
+  .card-ep,
+  .related-badge,
+  .wl-remove-btn,
+  .hero-arrow {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(8, 8, 12, 0.92);
+  }
+
+  .card:hover,
+  .card:active {
+    transform: none;
+    box-shadow: none;
+    background: var(--bg-card);
+    border-color: var(--border);
+  }
+
+  .card:hover .card-image img {
+    transform: none;
+  }
+
+  .btn:hover,
+  .btn-primary:hover,
+  .btn-outline:hover {
+    transform: none;
+  }
+
+  .btn-outline:hover {
+    border-color: var(--border);
+    color: var(--text-muted);
+    background: transparent;
+  }
+
+  .btn-danger:hover {
+    transform: none;
+    background: transparent;
+    color: var(--accent);
+  }
+
+  .ep-btn:hover {
+    transform: none;
+  }
+
+  .ep-btn-aired:hover {
+    border-color: var(--border);
+    color: var(--text-muted);
+  }
+
+  .hero-slide-bg {
+    transition: none;
+  }
+
+  .hero-slide.active .hero-slide-bg {
+    transform: none;
+  }
+
+  .history-item:hover {
+    background: var(--bg-card);
+    border-color: var(--border);
+  }
+
+  .nav-links a:hover {
+    background: transparent;
+    color: var(--text-muted);
+  }
+
+  .page-btn:hover {
+    background: var(--bg-card);
+    color: var(--text-muted);
+    border-color: var(--border);
+  }
+
+  .player-source-btn:hover {
+    border-color: var(--border);
+    color: var(--text-muted);
+  }
+
+  .lang-btn:hover {
+    color: var(--text-muted);
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   22. REDUCED MOTION — respect users who disable animations. The loading
+   spinner is kept: it communicates that work is in progress.
+   ---------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .hero-slide,
+  .hero-slide-bg,
+  .hero-slide-badge::before,
+  .ep-btn-today,
+  .card,
+  .btn,
+  .ep-btn,
+  .hero-arrow,
+  .hero-dot {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .hero-slide.active .hero-slide-bg {
+    transform: none;
   }
 }

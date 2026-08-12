@@ -34,8 +34,8 @@
     id
     idMal
     title { romaji english }
-    coverImage { extraLarge large color }
-    format status episodes averageScore season seasonYear
+    coverImage { extraLarge large }
+    format status episodes averageScore
     nextAiringEpisode { airingAt episode }
   `;
 
@@ -45,9 +45,9 @@
     id
     idMal
     title { romaji english native }
-    coverImage { extraLarge large color }
+    coverImage { extraLarge large }
     bannerImage description genres format status episodes duration
-    season seasonYear averageScore popularity trending
+    season seasonYear averageScore
     studios(isMain: true) { nodes { name } }
     nextAiringEpisode { airingAt episode }
     relations {
@@ -73,6 +73,11 @@
   // Holds the active page's cleanup callback (timers, observers, listeners).
   // The router calls it before rendering the next page.
   let currentPage = { destroy: null };
+
+  // Incremented on every route dispatch. Async page renderers capture it
+  // before awaiting network work and abort if it changed by the time they
+  // finish — a stale render must never write over a newer page.
+  let navToken = 0;
 
   // ----------------------------------------------------------------------------
   // STREAMING EMBED INTEGRATION
@@ -189,16 +194,31 @@
     dubCache: "anicult_dub_cache_v2",
   };
 
+  // In-memory mirror of parsed localStorage values. The dub cache, progress,
+  // watchlist and history are re-read (getItem + JSON.parse) many times per
+  // render — e.g. isDubCached() runs once per card on home and search. Memoizing
+  // avoids re-parsing the same JSON dozens of times; writes stay immediate.
+  const storageCache = new Map();
+
   function storageGet(key) {
+    if (storageCache.has(key)) return storageCache.get(key);
+    let value = null;
     try {
       const r = localStorage.getItem(key);
-      return r ? JSON.parse(r) : null;
+      value = r ? JSON.parse(r) : null;
     } catch {
-      return null;
+      value = null;
     }
+    storageCache.set(key, value);
+    return value;
   }
   function storageSet(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
+    // Persist first, then mirror into the cache: if serialization or the
+    // storage write throws, the cache must not hold a value that never
+    // reached localStorage.
+    const serialized = JSON.stringify(value);
+    localStorage.setItem(key, serialized);
+    storageCache.set(key, value);
   }
 
   function getDubCache() {
@@ -407,11 +427,25 @@
 
   // HTML-escapes untrusted strings. AniList-provided text (titles, descriptions,
   // genres) is user-generated, so always pass it through esc() before injecting
-  // it into template literals.
+  // it into template literals. Regex-based (no DOM allocation) because esc() runs
+  // hundreds of times per page render.
+  const ESCAPE_MAP = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  };
   function esc(str) {
-    const d = document.createElement("div");
-    d.textContent = str;
-    return d.innerHTML;
+    if (str == null) return "";
+    return String(str).replace(/[&<>"']/g, (c) => ESCAPE_MAP[c]);
+  }
+
+  // Escapes a string for use inside a CSS url('...') value. HTML escaping
+  // (esc) would leave literal entities that break the URL, so backslashes and
+  // quotes get CSS-style backslash escaping instead.
+  function cssUrl(str) {
+    return String(str).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   }
 
   function stripHtml(html) {
@@ -524,7 +558,7 @@
     const fmt = anime.format;
     const ep = epText(anime);
     const isDub = isDubCached(anime.id) === true;
-    return `<a href="#/anime/${anime.id}" class="card" id="card-${anime.id}">
+    return `<a href="#/anime/${anime.id}" class="card">
       <div class="card-image">
         <img src="${esc(img)}" alt="${esc(t)}" loading="lazy">
         ${score ? `<span class="card-score">${score}%</span>` : ""}
@@ -557,6 +591,7 @@
       currentPage.destroy();
       currentPage = { destroy: null };
     }
+    navToken++;
     const { path, params } = parseHash();
 
     app.innerHTML = `<div class="loading"><div class="loading-spinner"></div><div>Loading...</div></div>`;
@@ -617,12 +652,12 @@
               : `Next Ep ${nxt.episode} soon`;
         }
         html += `<div class="hero-slide ${i === 0 ? "active" : ""}" data-index="${i}">
-          <div class="hero-slide-bg" style="background-image:url('${esc(bg)}')"></div>
+          <div class="hero-slide-bg"${i === 0 ? ` style="background-image:url('${esc(bg)}')"` : ""}></div>
           <div class="hero-slide-overlay"></div>
           <div class="hero-slide-content">
             <div class="hero-rank">#${i + 1}</div>
             <div class="hero-slide-main">
-              <div class="hero-slide-cover"><img src="${esc(cover(anime))}" alt="${esc(t)}"></div>
+              <div class="hero-slide-cover"><img${i === 0 ? ` src="${esc(cover(anime))}"` : ""} alt="${esc(t)}"></div>
               <div class="hero-slide-info">
                 <div class="hero-slide-badge">Now Airing</div>
                 <div class="hero-slide-title">${esc(t)}</div>
@@ -669,15 +704,39 @@
     const slides = document.querySelectorAll(".hero-slide");
     const dots = document.querySelectorAll(".hero-dot");
     const slideshowEl = document.getElementById("hero-slideshow");
+    const heroBgs = topAiring.map((a) => a.bannerImage || cover(a));
+
+    // Only the active slide loads its banner/cover image. The other slides'
+    // backgrounds and covers are filled in the first time they become active —
+    // fetching and decoding 10 full-size banners at once is a big network and
+    // decode hit on phones.
+    function ensureSlideMedia(slide, i) {
+      const bg = slide.querySelector(".hero-slide-bg");
+      if (bg && !bg.style.backgroundImage) {
+        bg.style.backgroundImage = `url('${cssUrl(heroBgs[i])}')`;
+      }
+      const coverImg = slide.querySelector(".hero-slide-cover img");
+      if (coverImg && !coverImg.getAttribute("src")) {
+        coverImg.src = cover(topAiring[i]);
+      }
+    }
 
     function showSlide(n) {
       heroIndex = (n + heroCount) % heroCount;
-      slides.forEach((s, i) => s.classList.toggle("active", i === heroIndex));
+      slides.forEach((s, i) => {
+        s.classList.toggle("active", i === heroIndex);
+        if (i === heroIndex) ensureSlideMedia(s, i);
+      });
       dots.forEach((d, i) => d.classList.toggle("active", i === heroIndex));
     }
 
     function startHero() {
       clearInterval(heroTimer);
+      // Never run the interval while the tab is hidden (e.g. the page was
+      // loaded or re-rendered in a background tab): visibilitychange only
+      // fires on changes, so an already-hidden document would otherwise keep
+      // a running interval forever.
+      if (document.hidden) return;
       heroTimer = setInterval(() => showSlide(heroIndex + 1), 3000);
     }
 
@@ -757,9 +816,19 @@
     );
 
     if (loader) observer.observe(loader);
+
+    // Don't rotate slides (and fade between them) while the tab is hidden —
+    // the transitions and compositing would otherwise run in the background.
+    const onVisibility = () => {
+      if (document.hidden) clearInterval(heroTimer);
+      else if (slideshowEl && heroCount > 1) startHero();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     currentPage.destroy = () => {
       if (heroTimer) clearInterval(heroTimer);
       observer.disconnect();
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }
 
@@ -773,19 +842,33 @@
     const sort = params.get("sort") || (q ? "SEARCH_MATCH" : "TRENDING_DESC");
     const dub = params.get("dub") === "1" || params.get("dubbed") === "1";
 
+    // Capture the route generation up front — before any await — so a stale
+    // render (navigation that happened while the fetch or dub probes were in
+    // flight) can detect it and never write over the newer page.
+    const nav = navToken;
+
     let result;
     if (q) result = await searchAnime(q, page, 24, format || null, sort);
     else result = await browseAnime(page, 24, sort, format || null);
+
+    // Stale render — abort before spawning any probe iframes for a dead route.
+    if (nav !== navToken) return;
 
     if (dub && result && result.media) {
       const unknownItems = result.media.filter(
         (a) => isDubCached(a.id) === null,
       );
-      if (unknownItems.length > 0) {
-        await Promise.all(unknownItems.map((a) => probeDub(a)));
+      // Probe in small batches: every probe spawns a hidden video iframe, and
+      // spawning dozens at once stalls low-end phones.
+      for (let i = 0; i < unknownItems.length; i += 4) {
+        await Promise.all(unknownItems.slice(i, i + 4).map((a) => probeDub(a)));
+        if (nav !== navToken) return;
       }
       result.media = result.media.filter((a) => isDubCached(a.id) === true);
     }
+
+    // Stale render — a new route started while we were awaiting probes.
+    if (nav !== navToken) return;
 
     const sortOpts = [
       { v: "SEARCH_MATCH", l: "Relevance" },
@@ -837,22 +920,7 @@
       html += `<div class="empty"><div class="empty-title">No results found</div><div class="empty-text">Try a different search term or filter</div></div>`;
     } else {
       html += `<div class="grid grid-wide">${result.media
-        .map((a) => {
-          const t = title(a),
-            img = cover(a),
-            s = a.averageScore,
-            ep = epText(a),
-            isDub = isDubCached(a.id) === true;
-          return `<a href="#/anime/${a.id}" class="card" id="search-card-${a.id}">
-          <div class="card-image"><img src="${esc(img)}" alt="${esc(t)}" loading="lazy">
-            ${s ? `<span class="card-score">${s}%</span>` : ""}
-            ${a.format ? `<span class="card-format">${esc(a.format)}</span>` : ""}
-            ${isDub ? `<span class="card-dub">DUB</span>` : ""}
-            ${ep ? `<span class="card-ep">${esc(ep)}</span>` : ""}
-          </div>
-          <div class="card-body"><div class="card-title">${esc(t)}</div></div>
-        </a>`;
-        })
+        .map(cardHtml)
         .join("")}</div>`;
     }
 
@@ -878,6 +946,8 @@
       html += `</div>`;
     }
 
+    // Abort if the user navigated away while this render was awaiting probes.
+    if (nav !== navToken) return;
     app.innerHTML = html;
   }
 
@@ -1209,26 +1279,42 @@
       </div>`;
     }
 
-    function render() {
-      let html = `<div class="player-container">`;
+    // The episode grid can be hundreds of buttons long (long-running shows).
+    // It only depends on data that is fixed for the lifetime of this page, so
+    // build it once. Everything that changes when the user switches sources or
+    // languages lives in #player-dynamic and is the only region re-rendered.
+    let episodeGridHtml = "";
+    if (totalEps > 0) {
+      const watched = getProgress(anime.id);
+      episodeGridHtml = `<div class="episodes-section"><h3 class="episodes-title" style="margin-bottom:12px">Episodes</h3><div class="episodes-grid">`;
+      for (let i = 1; i <= totalEps; i++) {
+        const isReleased = i <= airedEps;
+        const isWatched = i <= watched;
+        let cls = "ep-btn";
+        if (i === episode) cls += " ep-btn-current";
+        if (isReleased) {
+          cls += isWatched ? " ep-btn-watched" : " ep-btn-aired";
+          episodeGridHtml += `<a href="#/watch/${anime.id}/${i}" class="${cls}">${i}</a>`;
+        } else {
+          cls += " ep-btn-upcoming";
+          const lbl = upcomingEpLabel(anime, i);
+          if (lbl.today) cls += " ep-btn-today";
+          episodeGridHtml += `<span class="${cls}" title="Not yet aired">${i}${lbl.text ? `<div class="ep-air-date upcoming-date">${esc(lbl.text)}</div>` : ""}</span>`;
+        }
+      }
+      episodeGridHtml += `</div></div>`;
+    }
 
-      html += `<div class="player-info"><div>
-        <a href="#/anime/${anime.id}" class="player-title">${esc(t)}</a>
-        <div class="player-episode">Episode ${episode}</div>
-      </div><div class="player-nav">`;
-      if (episode > 1)
-        html += `<a href="#/watch/${anime.id}/${episode - 1}" class="btn btn-outline btn-sm">${icons.arrowLeft()} Prev</a>`;
-      if (episode < airedEps)
-        html += `<a href="#/watch/${anime.id}/${episode + 1}" class="btn btn-primary btn-sm">Next ${icons.arrowRight()}</a>`;
-      html += `</div></div>`;
-
-      html += `<div class="player-wrapper">`;
+    // The player region only: wrapper (iframe / unavailable), countdown banner,
+    // sub-dub toggle, source list, error row and custom-URL input.
+    function playerAreaHtml() {
+      let html = `<div class="player-wrapper">`;
       if (loading && canWatch) {
         html += `<div class="loading"><div class="loading-spinner"></div><div>Finding video sources...</div></div>`;
       } else if (!canWatch) {
         html += unavailableHtml();
       } else if (embedUrl) {
-        html += `<iframe src="${esc(embedUrl)}" allowfullscreen loading="lazy" allow="autoplay; fullscreen"></iframe>`;
+        html += `<iframe src="${esc(embedUrl)}" loading="lazy" allow="autoplay; fullscreen"></iframe>`;
       } else {
         html += unavailableHtml();
       }
@@ -1273,42 +1359,25 @@
         html += `<div class="player-url-input"><input type="text" id="custom-embed-url" placeholder="Or paste an embed URL..." /><button class="btn btn-primary btn-sm" id="load-custom-url">Load</button></div>`;
       }
 
-      if (totalEps > 0) {
-        const watched = getProgress(anime.id);
-        html += `<div style="margin-top:24px"><h3 class="episodes-title" style="margin-bottom:12px">Episodes</h3><div class="episodes-grid">`;
-        for (let i = 1; i <= totalEps; i++) {
-          const isReleased = i <= airedEps;
-          const isWatched = i <= watched;
-          let cls = "ep-btn";
-          if (i === episode) cls += " ep-btn-current";
-          if (isReleased) {
-            cls += isWatched ? " ep-btn-watched" : " ep-btn-aired";
-            html += `<a href="#/watch/${anime.id}/${i}" class="${cls}">${i}</a>`;
-          } else {
-            cls += " ep-btn-upcoming";
-            const lbl = upcomingEpLabel(anime, i);
-            if (lbl.today) cls += " ep-btn-today";
-            html += `<span class="${cls}" title="Not yet aired">${i}${lbl.text ? `<div class="ep-air-date upcoming-date">${esc(lbl.text)}</div>` : ""}</span>`;
-          }
-        }
-        html += `</div></div>`;
-      }
+      return html;
+    }
 
-      html += `</div>`;
-      app.innerHTML = html;
+    function renderPlayer() {
+      const region = document.getElementById("player-dynamic");
+      region.innerHTML = playerAreaHtml();
 
-      document.querySelectorAll("[data-source-index]").forEach((btn) => {
+      region.querySelectorAll("[data-source-index]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const idx = parseInt(btn.dataset.sourceIndex);
           if (idx !== activeSource) {
             activeSource = idx;
             embedUrl = sources[idx].url;
-            render();
+            renderPlayer();
           }
         });
       });
 
-      document.querySelectorAll("[data-lang]").forEach((btn) => {
+      region.querySelectorAll("[data-lang]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const lang = btn.dataset.lang;
           if (lang !== currentLang) {
@@ -1318,20 +1387,20 @@
         });
       });
 
-      const loadBtn = document.getElementById("load-custom-url");
+      const loadBtn = region.querySelector("#load-custom-url");
       if (loadBtn) {
         loadBtn.addEventListener("click", () => {
-          const input = document.getElementById("custom-embed-url");
+          const input = region.querySelector("#custom-embed-url");
           if (input && input.value.trim()) {
             embedUrl = input.value.trim();
             sources.push({ id: "custom", name: "Custom", url: embedUrl });
             activeSource = sources.length - 1;
-            render();
+            renderPlayer();
           }
         });
       }
 
-      const retryBtn = document.getElementById("retry-btn");
+      const retryBtn = region.querySelector("#retry-btn");
       if (retryBtn) retryBtn.addEventListener("click", discoverSources);
     }
 
@@ -1354,14 +1423,14 @@
         }
         error =
           d.message || "The video failed to load. Please try another source.";
-        render();
+        renderPlayer();
       }
     }
 
     function discoverSources() {
       if (!canWatch) {
         loading = false;
-        render();
+        renderPlayer();
         return;
       }
       loading = true;
@@ -1381,10 +1450,27 @@
       activeSource = langIdx >= 0 ? langIdx : 0;
       embedUrl = sources[activeSource].url;
       loading = false;
-      render();
+      renderPlayer();
     }
 
-    render();
+    // Static shell: header, player region, and the pre-built episode grid.
+    // Only #player-dynamic is touched by renderPlayer() afterwards.
+    let html = `<div class="player-container">`;
+    html += `<div class="player-info"><div>
+      <a href="#/anime/${anime.id}" class="player-title">${esc(t)}</a>
+      <div class="player-episode">Episode ${episode}</div>
+    </div><div class="player-nav">`;
+    if (episode > 1)
+      html += `<a href="#/watch/${anime.id}/${episode - 1}" class="btn btn-outline btn-sm">${icons.arrowLeft()} Prev</a>`;
+    if (episode < airedEps)
+      html += `<a href="#/watch/${anime.id}/${episode + 1}" class="btn btn-primary btn-sm">Next ${icons.arrowRight()}</a>`;
+    html += `</div></div>`;
+    html += `<div id="player-dynamic"></div>`;
+    html += episodeGridHtml;
+    html += `</div>`;
+    app.innerHTML = html;
+
+    renderPlayer();
 
     const showCountdown = nextEp && nextEpDate;
     const timer = showCountdown
@@ -1427,7 +1513,7 @@
             fmt = a.format;
           const eps = a.episodes || 0,
             watched = getProgress(a.id);
-          return `<div class="card" style="position:relative" id="watchlist-card-${a.id}">
+          return `<div class="card" style="position:relative">
           <a href="#/anime/${a.id}">
             <div class="card-image">
               <img src="${esc(img)}" alt="${esc(t)}">
