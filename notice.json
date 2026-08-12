@@ -1,0 +1,12 @@
+{
+  "version": "1",
+  "title": "AniCult just got smoother ✨",
+  "items": [
+    "Much smoother scrolling on phones — heavy blur and hover effects are now skipped on touch devices",
+    "Faster page loads: hero images load on demand, and the watch page, search, and local data reads were optimized",
+    "The video player is now sandboxed, so embeds can never redirect you away from AniCult",
+    "Added reduced-motion support for viewers who prefer fewer animations",
+    "Removed unused code and cleaned up the codebase"
+  ],
+  "buttonLabel": "Got it"
+}

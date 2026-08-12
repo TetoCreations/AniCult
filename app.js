@@ -21,7 +21,8 @@
   //   9. Icons & shared components
   //  10. Router
   //  11. Page renderers
-  //  12. Navigation & bootstrap
+  //  12. One-time update notice (content in notice.json)
+  //  13. Navigation & bootstrap
   // ============================================================================
 
   // ----------------------------------------------------------------------------
@@ -1658,7 +1659,92 @@
   }
 
   // ----------------------------------------------------------------------------
-  // 12. NAVIGATION & BOOTSTRAP
+  // 12. ONE-TIME UPDATE NOTICE
+  // Shows a modal announcing the latest changes. The content lives in
+  // notice.json (a separate file) so future updates can be announced by
+  // editing that file alone — bump "version" there and the notice shows once
+  // per version (tracked in localStorage), no app.js changes required.
+  // ----------------------------------------------------------------------------
+  const NOTICE_FILE = "notice.json";
+  const NOTICE_SEEN_KEY = "anicult_notice_seen";
+
+  async function showUpdateNotice() {
+    let notice;
+    try {
+      const res = await fetch(NOTICE_FILE, { cache: "no-cache" });
+      if (!res.ok) return;
+      notice = await res.json();
+    } catch {
+      return; // no notice file or offline — never block the app
+    }
+    if (
+      !notice ||
+      typeof notice.version !== "string" ||
+      !Array.isArray(notice.items) ||
+      notice.items.length === 0
+    ) {
+      return;
+    }
+    if (storageGet(NOTICE_SEEN_KEY) === notice.version) return;
+
+    const overlay = document.createElement("div");
+    overlay.className = "notice-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "notice-title");
+    overlay.innerHTML = `<div class="notice-card">
+      <div class="notice-title" id="notice-title">${esc(
+        notice.title || "What's new in AniCult",
+      )}</div>
+      <ul class="notice-list">${notice.items
+        .map((item) => `<li>${esc(item)}</li>`)
+        .join("")}</ul>
+      <div class="notice-actions">
+        <button class="btn btn-primary notice-close" id="notice-close" disabled>${esc(
+          notice.buttonLabel || "Got it",
+        )}</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    const closeBtn = overlay.querySelector(".notice-close");
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    // The notice can't be dismissed for the first 4 seconds.
+    const revealAt = Date.now() + 4000;
+    let countdown = null;
+    function tick() {
+      const left = Math.ceil((revealAt - Date.now()) / 1000);
+      if (left > 0) {
+        closeBtn.textContent = `${notice.buttonLabel || "Got it"} (${left}s)`;
+      } else {
+        closeBtn.textContent = notice.buttonLabel || "Got it";
+        closeBtn.disabled = false;
+        closeBtn.focus();
+        clearInterval(countdown);
+      }
+    }
+    countdown = setInterval(tick, 1000);
+    tick();
+
+    function closeNotice() {
+      if (closeBtn.disabled) return;
+      clearInterval(countdown);
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKey);
+      overlay.remove();
+      storageSet(NOTICE_SEEN_KEY, notice.version);
+    }
+    const onKey = (e) => {
+      if (e.key === "Escape" && !closeBtn.disabled) closeNotice();
+    };
+    closeBtn.addEventListener("click", closeNotice);
+    document.addEventListener("keydown", onKey);
+  }
+
+  // ----------------------------------------------------------------------------
+  // 13. NAVIGATION & BOOTSTRAP
   // ----------------------------------------------------------------------------
 
   // Navbar search: navigates to #/search?q=<query>.
@@ -1698,4 +1784,5 @@
     route();
   });
   route();
+  showUpdateNotice(); // fire-and-forget: renders the modal if a new notice exists
 })();

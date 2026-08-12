@@ -2437,3 +2437,69 @@ select:focus {
     transform: none;
   }
 }
+
+/* ----------------------------------------------------------------------------
+   23. ONE-TIME UPDATE NOTICE — modal overlay announcing the latest changes.
+   Content comes from notice.json (see app.js §12); the overlay lives on
+   <body> so route changes don't disturb it.
+   ---------------------------------------------------------------------------- */
+.notice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(8, 8, 12, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.notice-card {
+  width: 100%;
+  max-width: 460px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-lg);
+}
+
+.notice-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.notice-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.notice-list li {
+  position: relative;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.notice-list li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.notice-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
