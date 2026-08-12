@@ -306,6 +306,10 @@
       const iframe = document.createElement("iframe");
       iframe.src = makeEmbedUrl(episode, anime.id, "dub", anime.idMal || null);
       iframe.setAttribute("allow", "autoplay; fullscreen");
+      // Same sandbox as the player: scripts run (needed for the dub probe's
+      // postMessage signal) but the iframe can't redirect the page or open
+      // popups.
+      iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
       iframe.setAttribute("loading", "eager");
       iframe.style.cssText =
         "position:fixed;left:-10000px;top:0;width:320px;height:180px;border:0;opacity:0;pointer-events:none;";
@@ -1314,7 +1318,10 @@
       } else if (!canWatch) {
         html += unavailableHtml();
       } else if (embedUrl) {
-        html += `<iframe src="${esc(embedUrl)}" loading="lazy" allow="autoplay; fullscreen"></iframe>`;
+        // Sandboxed: the third-party player can run its scripts but cannot
+        // navigate the parent page (no redirects) or open popups. This also
+        // covers user-pasted custom embed URLs.
+        html += `<iframe src="${esc(embedUrl)}" loading="lazy" allow="autoplay; fullscreen" sandbox="allow-scripts allow-same-origin"></iframe>`;
       } else {
         html += unavailableHtml();
       }
