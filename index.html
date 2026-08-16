@@ -1,17 +1,9 @@
 <!doctype html>
 <html lang="en">
-  <!--
-    AniCult — single-page application shell.
-    Everything you see on screen is rendered client-side by app.js into
-    <main id="app"> (hash-based router: #/, #/anime/:id, #/watch/:id, ...).
-    No frameworks: vanilla JS + AniList GraphQL API + embedded video player.
-  -->
   <head>
-    <!-- ============ Core meta ============ -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- ============ SEO ============ -->
     <title>AniCult — Free Anime Streaming | Browse & Watch Online</title>
     <link rel="canonical" href="https://anicult.vercel.app/" />
 
@@ -27,11 +19,9 @@
     <meta name="author" content="AniCult" />
     <meta name="theme-color" content="#e63946" />
 
-    <!-- ============ Icons (favicon.svg doubles as touch icon) ============ -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
 
-    <!-- ============ Open Graph (link previews: Discord, Facebook, etc.) ============ -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://anicult.vercel.app/" />
     <meta property="og:title" content="AniCult | Free Anime Streaming" />
@@ -48,7 +38,6 @@
     <meta property="og:image:height" content="630" />
     <meta property="og:locale" content="en_US" />
 
-    <!-- ============ Twitter card (X link previews) ============ -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://anicult.vercel.app/" />
     <meta name="twitter:title" content="AniCult | Free Anime Streaming" />
@@ -61,7 +50,6 @@
       content="https://anicult.vercel.app/screenshot.png"
     />
 
-    <!-- ============ Fonts & styles ============ -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -70,7 +58,6 @@
     />
     <link rel="stylesheet" href="styles.css" />
 
-    <!-- ============ Structured data (rich results / Google) ============ -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -89,9 +76,6 @@
     </script>
   </head>
   <body>
-    <!-- ============ Navbar (static shell; styling in styles.css §3) ============
-         Links are hash routes handled by the router in app.js.
-         #nav-toggle expands the mobile menu (#nav-links) on screens ≤ 960px. -->
     <nav class="nav">
       <a href="#/" class="nav-logo">AniCult</a>
       <button
@@ -120,12 +104,8 @@
       </form>
     </nav>
 
-    <!-- ============ SPA mount point ============
-         All pages (home, search, detail, watch, watchlist, history, about)
-         are rendered into this element by app.js. -->
     <main class="main" id="app"></main>
 
-    <!-- ============ App entry point ============ -->
     <script src="app.js"></script>
   </body>
 </html>
