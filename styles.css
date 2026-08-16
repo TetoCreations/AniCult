@@ -238,7 +238,9 @@ select:focus {
   height: 2px;
   background: var(--text);
   border-radius: 1px;
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .nav-toggle.open span:nth-child(1) {
@@ -830,7 +832,9 @@ select:focus {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   margin-bottom: 8px;
-  transition: background var(--transition), border-color var(--transition);
+  transition:
+    background var(--transition),
+    border-color var(--transition);
 }
 
 .history-item:hover {
@@ -1334,7 +1338,9 @@ select:focus {
   color: var(--text-muted);
   border: none;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .lang-btn:hover {
@@ -1394,7 +1400,10 @@ select:focus {
   font-size: 10px;
   padding: 3px 8px;
   z-index: 2;
-  transition: background var(--transition), color var(--transition), border-color var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .wl-remove-btn:hover {
