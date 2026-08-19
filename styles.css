@@ -163,6 +163,16 @@ select:focus {
   color: var(--accent);
   flex-shrink: 0;
   text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-logo-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
 }
 
 .nav-links {
