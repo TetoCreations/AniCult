@@ -1,12 +1,11 @@
 {
-  "version": "1",
-  "title": "AniCult just got smoother ✨",
+  "version": "2",
+  "title": "What's new in AniCult ✨",
   "items": [
-    "Much smoother scrolling on phones — heavy blur and hover effects are now skipped on touch devices",
-    "Faster page loads: hero images load on demand, and the watch page, search, and local data reads were optimized",
-    "The video player is now sandboxed, so embeds can never redirect you away from AniCult",
-    "Added reduced-motion support for viewers who prefer fewer animations",
-    "Removed unused code and cleaned up the codebase"
+    "Added AniXo as a second video provider — switch between Megavid and AniXo with a one-tap toggle in the player",
+    "Sub and Dub are now always available, so you can switch audio instantly on any episode",
+    "Megavid embeds stay sandboxed so they can never redirect you away from AniCult",
+    "Cleaned up the codebase and removed unused features"
   ],
   "buttonLabel": "Got it"
 }

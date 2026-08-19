@@ -42,10 +42,66 @@
 
   let navToken = 0;
 
-  function makeEmbedUrl(episode, anilistId, lang = "sub", malId = null) {
-    const idType = malId ? "mal" : "ani";
-    const id = malId || anilistId;
-    return `https://megavid.buzz/${idType}/${id}/${episode}/${lang}?color=%23e63946&autoplay=true`;
+  const EMBED_PROVIDERS = [
+    {
+      id: "megavid",
+      name: "Megavid",
+      makeUrl(episode, anilistId, lang = "sub", malId = null) {
+        const idType = malId ? "mal" : "ani";
+        const id = malId || anilistId;
+        return `https://megavid.buzz/${idType}/${id}/${episode}/${lang}?color=%23e63946&autoplay=true`;
+      },
+    },
+    {
+      id: "anixo",
+      name: "AniXo",
+      makeUrl(episode, anilistId, lang = "sub") {
+        return `https://anixo.buzz/embed/ani/${anilistId}/${episode}/${lang}?color=%23e63946`;
+      },
+    },
+  ];
+
+  function isAnixoUrl(url) {
+    return /^https:\/\/anixo\.buzz\//.test(url);
+  }
+
+  function classifyPlayerMessage(d) {
+    if (!d || typeof d !== "object") return null;
+    if (d.type === "watching-log")
+      return { provider: "megavid", state: "playing" };
+    if (d.channel === "kisskh") {
+      if (d.event === "complete") return { provider: "megavid", state: "ended" };
+      if (d.event === "time") return { provider: "megavid", state: "playing" };
+      if (
+        d.event === "error" ||
+        d.event === "unavailable" ||
+        d.event === "no_source"
+      )
+        return { provider: "megavid", state: "error", message: d.message };
+      return { provider: "megavid", state: "ignored" };
+    }
+    if (typeof d.type === "string" && d.type.indexOf("aniko:") === 0) {
+      if (d.type === "aniko:ended")
+        return { provider: "anixo", state: "ended" };
+      if (d.type === "aniko:ready") {
+        if (d.streams > 0) return { provider: "anixo", state: "playing" };
+        return {
+          provider: "anixo",
+          state: "error",
+          message: "No video sources available.",
+        };
+      }
+      if (
+        d.type === "aniko:play" ||
+        d.type === "aniko:pause" ||
+        d.type === "aniko:timeupdate"
+      )
+        return { provider: "anixo", state: "playing" };
+      if (d.type.indexOf("aniko:error") === 0)
+        return { provider: "anixo", state: "error", message: d.message };
+      return { provider: "anixo", state: "ignored" };
+    }
+    return null;
   }
 
   async function gql(query, variables = {}) {
@@ -126,7 +182,6 @@
     watchlist: "anicult_watchlist",
     history: "anicult_history",
     progress: "anicult_progress",
-    dubCache: "anicult_dub_cache_v2",
   };
 
   const storageCache = new Map();
@@ -149,52 +204,6 @@
     storageCache.set(key, value);
   }
 
-  function getDubCache() {
-    return storageGet(KEYS.dubCache) || {};
-  }
-
-  function setDubCached(id, episode, isAvailable) {
-    if (typeof episode === "boolean") {
-      isAvailable = episode;
-      episode = 1;
-    }
-    const cache = getDubCache();
-    const epKey = id + "_" + (episode || 1);
-    cache[epKey] = { available: isAvailable, timestamp: Date.now() };
-    if (!isAvailable) {
-      const currentMax = cache[id + "_max_dub"];
-      cache[id + "_max_dub"] = Math.min(
-        currentMax !== undefined ? currentMax : 9999,
-        (episode || 1) - 1,
-      );
-    }
-    if (!isAvailable || episode === 1 || cache[id] === undefined) {
-      cache[id] = { available: isAvailable, timestamp: Date.now() };
-    }
-    storageSet(KEYS.dubCache, cache);
-  }
-
-  function isDubCached(id, episode = null) {
-    const cache = getDubCache();
-    if (episode) {
-      const epEntry = cache[id + "_" + episode];
-      if (epEntry !== undefined) {
-        if (typeof epEntry === "boolean") return epEntry;
-        if (typeof epEntry === "object" && epEntry !== null)
-          return epEntry.available;
-      }
-      const maxDub = cache[id + "_max_dub"];
-      if (maxDub !== undefined && episode > maxDub) {
-        return false;
-      }
-    }
-    const entry = cache[id];
-    if (entry === undefined) return null;
-    if (typeof entry === "boolean") return entry;
-    if (typeof entry === "object" && entry !== null) return entry.available;
-    return null;
-  }
-
   function parseKisskhMessage(e) {
     let d = e.data;
     if (typeof d === "string") {
@@ -206,59 +215,6 @@
     }
     if (!d || typeof d !== "object") return null;
     return d;
-  }
-
-  function probeDub(anime, episode = 1) {
-    const cached = isDubCached(anime.id, episode);
-    if (cached !== null) return Promise.resolve(cached);
-
-    return new Promise((resolve) => {
-      const iframe = document.createElement("iframe");
-      iframe.src = makeEmbedUrl(episode, anime.id, "dub", anime.idMal || null);
-      iframe.setAttribute("allow", "autoplay; fullscreen");
-      iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
-      iframe.setAttribute("loading", "eager");
-      iframe.style.cssText =
-        "position:fixed;left:-10000px;top:0;width:320px;height:180px;border:0;opacity:0;pointer-events:none;";
-      document.body.appendChild(iframe);
-
-      let settled = false;
-      function cleanup(res) {
-        if (settled) return;
-        settled = true;
-        window.removeEventListener("message", onMsg);
-        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-        setDubCached(anime.id, episode, res);
-        resolve(res);
-      }
-
-      function onMsg(e) {
-        const d = parseKisskhMessage(e);
-        if (!d || e.source !== iframe.contentWindow) return;
-
-        if (d.type === "watching-log") {
-          cleanup(true);
-          return;
-        }
-        if (d.channel !== "kisskh") return;
-
-        if (d.event === "time" || d.event === "complete") {
-          cleanup(true);
-        } else if (
-          d.event === "error" ||
-          d.event === "unavailable" ||
-          d.event === "no_source"
-        ) {
-          cleanup(false);
-        }
-      }
-
-      window.addEventListener("message", onMsg);
-
-      setTimeout(() => {
-        cleanup(false);
-      }, 6000);
-    });
   }
 
   function getWatchlist() {
@@ -425,13 +381,11 @@
     const score = anime.averageScore;
     const fmt = anime.format;
     const ep = epText(anime);
-    const isDub = isDubCached(anime.id) === true;
     return `<a href="#/anime/${anime.id}" class="card">
       <div class="card-image">
         <img src="${esc(img)}" alt="${esc(t)}" loading="lazy">
         ${score ? `<span class="card-score">${score}%</span>` : ""}
         ${fmt ? `<span class="card-format">${esc(fmt)}</span>` : ""}
-        ${isDub ? `<span class="card-dub">DUB</span>` : ""}
         ${ep ? `<span class="card-ep">${esc(ep)}</span>` : ""}
       </div>
       <div class="card-body"><div class="card-title">${esc(t)}</div></div>
@@ -679,26 +633,12 @@
     const page = parseInt(params.get("page")) || 1;
     const format = params.get("format") || "";
     const sort = params.get("sort") || (q ? "SEARCH_MATCH" : "TRENDING_DESC");
-    const dub = params.get("dub") === "1" || params.get("dubbed") === "1";
 
     const nav = navToken;
 
     let result;
     if (q) result = await searchAnime(q, page, 24, format || null, sort);
     else result = await browseAnime(page, 24, sort, format || null);
-
-    if (nav !== navToken) return;
-
-    if (dub && result && result.media) {
-      const unknownItems = result.media.filter(
-        (a) => isDubCached(a.id) === null,
-      );
-      for (let i = 0; i < unknownItems.length; i += 4) {
-        await Promise.all(unknownItems.slice(i, i + 4).map((a) => probeDub(a)));
-        if (nav !== navToken) return;
-      }
-      result.media = result.media.filter((a) => isDubCached(a.id) === true);
-    }
 
     if (nav !== navToken) return;
 
@@ -725,7 +665,6 @@
         page: String(page),
         format,
         sort,
-        dub: dub ? "1" : "",
         ...overrides,
       };
       const sp = new URLSearchParams();
@@ -745,7 +684,6 @@
       html += `<a href="${buildUrl({ format: o.v, page: "1" })}" class="btn btn-sm ${format === o.v ? "btn-primary" : "btn-outline"}">${o.l}</a>`;
     });
     html += `<span style="color:var(--text-dim)">|</span>`;
-    html += `<a href="${buildUrl({ dub: dub ? "" : "1", page: "1" })}" class="btn btn-sm ${dub ? "btn-primary" : "btn-outline"}">${dub ? "✓ Dubbed" : "Dubbed"}</a>`;
     html += `</div>`;
 
     if (result.media.length === 0) {
@@ -835,7 +773,6 @@
               .map((g) => `<span>${esc(g)}</span>`)
               .join("")}
             ${anime.averageScore ? `<span class="tag-accent">${anime.averageScore}%</span>` : ""}
-            ${isDubCached(anime.id) === true ? `<span class="tag-accent tag-dub">DUB</span>` : ""}
             ${statusBadge(status)}
           </div>
           <div class="detail-hero-desc">${esc(desc)}</div>
@@ -1055,15 +992,7 @@
       error = null,
       embedUrl = "",
       currentLang = "sub",
-      isDubAvailable = isDubCached(anime.id, episode);
-
-    if (isDubAvailable === null && canWatch) {
-      isDubAvailable = await probeDub(anime, episode);
-    } else {
-      isDubAvailable = isDubAvailable === true;
-    }
-
-    if (!isDubAvailable) currentLang = "sub";
+      currentProvider = EMBED_PROVIDERS[0].id;
 
     function unavailableHtml() {
       if (notYetReleased) {
@@ -1126,7 +1055,10 @@
       } else if (!canWatch) {
         html += unavailableHtml();
       } else if (embedUrl) {
-        html += `<iframe src="${esc(embedUrl)}" loading="lazy" allow="autoplay; fullscreen" sandbox="allow-scripts allow-same-origin"></iframe>`;
+        const sandboxAttr = isAnixoUrl(embedUrl)
+          ? ""
+          : ' sandbox="allow-scripts allow-same-origin"';
+        html += `<iframe src="${esc(embedUrl)}" loading="lazy" allow="autoplay; fullscreen"${sandboxAttr}></iframe>`;
       } else {
         html += unavailableHtml();
       }
@@ -1143,16 +1075,18 @@
       }
 
       if (canWatch) {
-        if (isDubAvailable) {
-          html += `<div class="player-lang-toggle">
-            <button class="lang-btn ${currentLang === "sub" ? "lang-btn-active" : ""}" data-lang="sub">Sub</button>
-            <button class="lang-btn ${currentLang === "dub" ? "lang-btn-active" : ""}" data-lang="dub">Dub</button>
-          </div>`;
-        } else {
-          html += `<div class="player-lang-toggle">
-            <span class="lang-btn lang-btn-active" style="cursor:default">Subtitled</span>
-          </div>`;
-        }
+        html += `<div class="player-lang-toggle">
+          <button class="lang-btn ${currentLang === "sub" ? "lang-btn-active" : ""}" data-lang="sub">Sub</button>
+          <button class="lang-btn ${currentLang === "dub" ? "lang-btn-active" : ""}" data-lang="dub">Dub</button>
+        </div>`;
+      }
+
+      if (canWatch && EMBED_PROVIDERS.length > 1) {
+        html += `<div class="player-provider-toggle">`;
+        EMBED_PROVIDERS.forEach((p) => {
+          html += `<button class="provider-btn ${currentProvider === p.id ? "provider-btn-active" : ""}" data-provider="${p.id}">${esc(p.name)}</button>`;
+        });
+        html += `</div>`;
       }
 
       if (sources.length > 2) {
@@ -1199,6 +1133,16 @@
         });
       });
 
+      region.querySelectorAll("[data-provider]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const pid = btn.dataset.provider;
+          if (pid !== currentProvider) {
+            currentProvider = pid;
+            discoverSources();
+          }
+        });
+      });
+
       const loadBtn = region.querySelector("#load-custom-url");
       if (loadBtn) {
         loadBtn.addEventListener("click", () => {
@@ -1218,23 +1162,18 @@
 
     function onPlayerMessage(e) {
       const d = parseKisskhMessage(e);
-      if (!d || d.channel !== "kisskh") return;
+      if (!d) return;
       const iframe = app.querySelector("iframe");
       if (!iframe || e.source !== iframe.contentWindow) return;
-      if (d.event === "complete") {
+      const cls = classifyPlayerMessage(d);
+      if (!cls || cls.provider !== currentProvider) return;
+      if (cls.state === "ended") {
         if (episode < airedEps) {
           location.hash = `#/watch/${anime.id}/${episode + 1}`;
         }
-      } else if (d.event === "error" && !error) {
-        if (currentLang === "dub") {
-          setDubCached(anime.id, episode, false);
-          isDubAvailable = false;
-          currentLang = "sub";
-          discoverSources();
-          return;
-        }
+      } else if (cls.state === "error" && !error) {
         error =
-          d.message || "The video failed to load. Please try another source.";
+          cls.message || "The video failed to load. Please try another source.";
         renderPlayer();
       }
     }
@@ -1252,12 +1191,13 @@
       activeSource = 0;
 
       const malId = anime.idMal || null;
-      const subUrl = makeEmbedUrl(episode, id, "sub", malId);
+      const provider =
+        EMBED_PROVIDERS.find((p) => p.id === currentProvider) ||
+        EMBED_PROVIDERS[0];
+      const subUrl = provider.makeUrl(episode, id, "sub", malId);
       sources = [{ id: "sub", name: "Sub", url: subUrl }];
-      if (isDubAvailable) {
-        const dubUrl = makeEmbedUrl(episode, id, "dub", malId);
-        sources.push({ id: "dub", name: "Dub", url: dubUrl });
-      }
+      const dubUrl = provider.makeUrl(episode, id, "dub", malId);
+      sources.push({ id: "dub", name: "Dub", url: dubUrl });
       const langIdx = sources.findIndex((s) => s.id === currentLang);
       activeSource = langIdx >= 0 ? langIdx : 0;
       embedUrl = sources[activeSource].url;

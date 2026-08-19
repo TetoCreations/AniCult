@@ -1272,6 +1272,40 @@ select:focus {
   color: var(--text);
 }
 
+.player-provider-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px;
+  width: fit-content;
+}
+
+.provider-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.provider-btn:hover {
+  color: var(--text);
+}
+
+.provider-btn-active {
+  background: var(--accent);
+  color: var(--text);
+}
+
 .player-url-input {
   display: flex;
   gap: 8px;
@@ -2158,6 +2192,11 @@ select:focus {
     padding: 5px 12px;
     font-size: 12px;
   }
+
+  .provider-btn {
+    padding: 5px 12px;
+    font-size: 12px;
+  }
 }
 
 @media (min-width: 769px) {
@@ -2302,6 +2341,10 @@ select:focus {
   }
 
   .lang-btn:hover {
+    color: var(--text-muted);
+  }
+
+  .provider-btn:hover {
     color: var(--text-muted);
   }
 }
